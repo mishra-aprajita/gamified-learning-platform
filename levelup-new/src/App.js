@@ -19,6 +19,7 @@ import Quiz               from './pages/Quiz';
 import Pomodoro             from './pages/Pomodoro';
 import Reports               from './pages/Reports';
 import Badges            from './pages/Badges';
+import CSSQuest from './components/CSSQuest';   // 👈 added
 import Mascot         from './components/Mascot';
 import NovaChat         from './components/NovaChat';
 
@@ -27,8 +28,6 @@ function AppInner() {
   const [page,       setPage]       = useState('dashboard');
   const [collapsed,  setCollapsed]  = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  // Controls what a logged-out visitor sees: the marketing landing page first,
-  // then the login/register screen once they choose to continue.
   const [authView,   setAuthView]   = useState('landing'); // 'landing' | 'login' | 'register'
 
   useEffect(() => {
@@ -37,7 +36,6 @@ function AppInner() {
     return () => window.removeEventListener('resize', handler);
   }, []);
 
-  // Apply saved theme on first load
   useEffect(() => {
     const theme = localStorage.getItem('levelup_theme') || 'dark';
     document.documentElement.setAttribute('data-theme', theme);
@@ -66,8 +64,6 @@ function AppInner() {
     return <Auth initialMode={authView} onBack={() => setAuthView('landing')} />;
   }
 
-  // First-time users complete the Goal Selection onboarding step
-  // before they ever see the main Dashboard.
   if (!user.onboardingComplete) {
     return <GoalSelection onContinue={() => setPage('dashboard')} />;
   }
@@ -93,6 +89,7 @@ function AppInner() {
         {page === 'pomodoro'    && <Pomodoro    {...pageProps} />}
         {page === 'reports'     && <Reports     {...pageProps} />}
         {page === 'badges'      && <Badges      {...pageProps} />}
+        {page === 'cssquest'    && <CSSQuest    {...pageProps} />}   {/* 👈 added */}
       </div>
       <NovaChat />
     </div>
