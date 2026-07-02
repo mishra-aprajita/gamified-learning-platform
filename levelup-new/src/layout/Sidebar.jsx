@@ -17,6 +17,7 @@ const growthItems = [
   { id: 'tasks',    icon: '✅', label: 'Daily Tasks' },
   { id: 'roadmap',  icon: '🗺️', label: 'Roadmap' },
   { id: 'quiz',     icon: '❓', label: 'Daily Quiz' },
+  { id: 'cssquest', icon: '💎', label: 'CSS Quest' },   // 👈 added
   { id: 'pomodoro', icon: '⏱️', label: 'Pomodoro' },
   { id: 'reports',  icon: '📊', label: 'Weekly Report' },
   { id: 'badges',   icon: '🏅', label: 'Badges' },
