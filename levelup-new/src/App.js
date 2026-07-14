@@ -19,9 +19,9 @@ import Quiz               from './pages/Quiz';
 import Pomodoro             from './pages/Pomodoro';
 import Reports               from './pages/Reports';
 import Badges            from './pages/Badges';
-import CSSQuest from './components/CSSQuest';   // 👈 added
 import Mascot         from './components/Mascot';
 import NovaChat         from './components/NovaChat';
+import PracticeHub from './pages/PracticeHub';
 
 function AppInner() {
   const { user, loading } = useAuth();
@@ -88,8 +88,8 @@ function AppInner() {
         {page === 'quiz'        && <Quiz        {...pageProps} />}
         {page === 'pomodoro'    && <Pomodoro    {...pageProps} />}
         {page === 'reports'     && <Reports     {...pageProps} />}
+        {page === 'practice' && <PracticeHub {...pageProps} />}
         {page === 'badges'      && <Badges      {...pageProps} />}
-        {page === 'cssquest'    && <CSSQuest    {...pageProps} />}   {/* 👈 added */}
       </div>
       <NovaChat />
     </div>
