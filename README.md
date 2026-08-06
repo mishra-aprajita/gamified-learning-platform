@@ -213,11 +213,6 @@ This project began with real user research, not assumptions:
 
 ---
 
-## 👩‍💻 Author
 
-**Aprajita Mishra**
-B.Tech Computer Science Engineering, KR Mangalam University
-
----
 
 *XPify — Everything you need to level up.*
