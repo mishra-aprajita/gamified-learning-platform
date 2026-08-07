@@ -4,7 +4,7 @@
 //  Automatically attaches the JWT token from localStorage.
 // ─────────────────────────────────────────────
 
-const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const BASE_URL = process.env.REACT_APP_API_URL || 'https://gamified-learning-platform-4b3f.onrender.com/api';
 
 // ── Helper: build headers ────────────────────
 const getHeaders = () => {

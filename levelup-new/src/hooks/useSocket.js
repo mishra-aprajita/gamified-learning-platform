@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'https://gamified-learning-platform-4b3f.onrender.com';
 
 export const useSocket = (userId, onMessageReceived) => {
   const socketRef  = useRef(null);
