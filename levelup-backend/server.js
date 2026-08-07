@@ -41,7 +41,7 @@ const server = http.createServer(app);
 // ── Socket.io Setup ──────────────────────────
 const io = socketIO(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: process.env.CLIENT_URL || 'https://gamified-learning-platform-drhf.vercel.app/',
     methods: ['GET', 'POST'],
   },
 });
@@ -108,7 +108,7 @@ io.on('connection', (socket) => {
 app.use((req, res, next) => { req.io = io; next(); });
 
 // ── Middleware ───────────────────────────────
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000', credentials: true }));
+app.use(cors({ origin: process.env.CLIENT_URL || 'https://gamified-learning-platform-drhf.vercel.app/', credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
