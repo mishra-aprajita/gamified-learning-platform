@@ -10,6 +10,7 @@ const http      = require('http');
 const socketIO  = require('socket.io');
 const cors      = require('cors');
 const connectDB = require('./config/db');
+const { corsOriginDelegate, getAllowedOrigins } = require('./config/cors');
 const errorHandler  = require('./middleware/errorHandler');
 const startStreakCron = require('./utils/cronJobs');
 const seedRoadmaps     = require('./utils/seedRoadmaps');
@@ -41,7 +42,7 @@ const server = http.createServer(app);
 // ── Socket.io Setup ──────────────────────────
 const io = socketIO(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'https://gamified-learning-platform-drhf.vercel.app/',
+    origin: getAllowedOrigins(),
     methods: ['GET', 'POST'],
   },
 });
@@ -108,7 +109,7 @@ io.on('connection', (socket) => {
 app.use((req, res, next) => { req.io = io; next(); });
 
 // ── Middleware ───────────────────────────────
-app.use(cors({ origin: process.env.CLIENT_URL || 'https://gamified-learning-platform-drhf.vercel.app/', credentials: true }));
+app.use(cors({ origin: corsOriginDelegate, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

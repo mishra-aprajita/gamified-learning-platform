@@ -1,13 +1,14 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
+const { repairUserIndexes } = require('../utils/repairUserIndexes');
 
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGO_URI);
-    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    const dbName = conn.connection.db.databaseName;
+    console.log(`✅ MongoDB Connected: ${conn.connection.host} (db: ${dbName})`);
 
-    // Align Atlas indexes with schema (fixes legacy non-sparse googleId_1)
-    await User.syncIndexes();
+    await repairUserIndexes(User);
     console.log('✅ User collection indexes synced');
   } catch (error) {
     console.error(`❌ MongoDB Error: ${error.message}`);
