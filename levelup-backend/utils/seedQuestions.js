@@ -74,7 +74,8 @@ module.exports = seedQuestions;
 
 // Allow running directly: node utils/seedQuestions.js
 if (require.main === module) {
-  require('dotenv').config();
+  const path = require('path');
+  require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
   const connectDB = require('../config/db');
   connectDB().then(async () => {
     await seedQuestions();

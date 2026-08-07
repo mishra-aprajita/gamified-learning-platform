@@ -3,7 +3,8 @@
 //  Run:  npm run dev   (development)
 //        npm start     (production)
 // ─────────────────────────────────────────────────────────────
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 const express   = require('express');
 const http      = require('http');
@@ -147,5 +148,7 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`\n🚀 XPify server running on http://localhost:${PORT}`);
   console.log(`📡 Socket.io ready`);
-  console.log(`🌍 Client URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}\n`);
+  console.log(`🌍 Client URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}`);
+  const apiKey = process.env.OPENAI_API_KEY;
+  console.log(`🔑 OPENAI_API_KEY: ${apiKey ? (apiKey === 'sk-your-openai-api-key-here' ? 'Placeholder (unconfigured)' : 'Loaded (ends with ' + apiKey.slice(-4) + ')') : 'Missing'}\n`);
 });

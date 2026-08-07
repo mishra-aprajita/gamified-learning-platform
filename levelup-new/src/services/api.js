@@ -27,7 +27,7 @@ const request = async (method, endpoint, body = null) => {
   const data = await res.json();
 
   if (!res.ok) {
-    throw new Error(data.message || 'Something went wrong');
+    throw new Error(data.error || data.message || 'Something went wrong');
   }
   return data;
 };

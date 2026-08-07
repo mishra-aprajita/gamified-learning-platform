@@ -1,8 +1,38 @@
 // controllers/novaController.js
+const fs = require('fs');
+const path = require('path');
 const User = require('../models/User');
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_MODEL    = 'gpt-4o-mini'; // fast + cheap, good enough for short study tips
+
+const isOpenAIConfigured = () => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  return !!(apiKey && apiKey !== 'sk-your-openai-api-key-here');
+};
+
+const sendUnconfiguredError = (res) => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  const isPlaceholder = apiKey === 'sk-your-openai-api-key-here';
+  const isDev = process.env.NODE_ENV !== 'production';
+
+  const envPath = path.resolve(__dirname, '../.env');
+  const envLoaded = fs.existsSync(envPath);
+
+  const errorDetail = isPlaceholder
+    ? "OPENAI_API_KEY is set to the default placeholder value."
+    : "OPENAI_API_KEY is missing from runtime environment.";
+
+  return res.status(503).json({
+    success: false,
+    error: errorDetail,
+    message: isDev
+      ? "Nova AI chat is not configured yet. Ask your admin to add a valid OPENAI_API_KEY to the backend .env file."
+      : "Nova AI chat is not configured yet. Ask your admin to configure a valid OPENAI_API_KEY in the Render dashboard environment variables.",
+    source: "backend",
+    envLoaded
+  });
+};
 
 // Nova's personality/instructions — keeps replies short, encouraging, on-topic
 const SYSTEM_PROMPT = `You are Nova, a friendly and encouraging study companion inside a student learning app called XPify.
@@ -25,11 +55,8 @@ exports.chatWithNova = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Message is required' });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(503).json({
-        success: false,
-        message: 'Nova AI chat is not configured yet. Ask your admin to add OPENAI_API_KEY to the backend .env file.',
-      });
+    if (!isOpenAIConfigured()) {
+      return sendUnconfiguredError(res);
     }
 
     // Pull in a little context about the student so Nova's tips feel personal
@@ -84,7 +111,7 @@ exports.chatWithNova = async (req, res, next) => {
 // ────────────────────────────────────────────
 exports.getDailyTip = async (req, res, next) => {
   try {
-    if (!process.env.OPENAI_API_KEY) {
+    if (!isOpenAIConfigured()) {
       return res.status(200).json({
         success: true,
         tip: "Consistency beats intensity — even 20 focused minutes today keeps your streak alive! 🔥",
