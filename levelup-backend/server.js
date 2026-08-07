@@ -144,11 +144,14 @@ app.use(errorHandler);
 startStreakCron();
 
 // ── Start Server ─────────────────────────────
-const PORT = process.env.PORT || 5000;
+const PORT     = process.env.PORT || 5000;
+const geminiSvc = require('./services/gemini');
 server.listen(PORT, () => {
+  const diag = geminiSvc.getDiagnostics();
   console.log(`\n🚀 XPify server running on http://localhost:${PORT}`);
   console.log(`📡 Socket.io ready`);
   console.log(`🌍 Client URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}`);
-  const apiKey = process.env.GEMINI_API_KEY;
-  console.log(`🔑 GEMINI_API_KEY: ${apiKey ? (apiKey === 'your-gemini-api-key-here' ? 'Placeholder (unconfigured)' : 'Loaded (ends with ' + apiKey.slice(-4) + ')') : 'Missing'}\n`);
+  console.log(`🤖 Gemini model : ${diag.model}  (${diag.apiVersion})`);
+  console.log(`🔑 GEMINI_API_KEY: ${diag.keyStatus}`);
+  console.log(`📦 Node         : ${diag.nodeVersion}  |  Env: ${diag.environment}\n`);
 });
