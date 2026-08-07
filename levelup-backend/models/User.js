@@ -37,7 +37,7 @@ const UserSchema = new mongoose.Schema(
       required: function () { return !this.googleId; }, // not required for Google sign-in users
     },
     googleId: {
-      type: String, default: null, unique: true, sparse: true,
+      type: String, unique: true, sparse: true,
     },
     authProvider: {
       type: String, enum: ['local', 'google'], default: 'local',
