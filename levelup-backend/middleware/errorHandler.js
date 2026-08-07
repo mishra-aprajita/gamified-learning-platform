@@ -1,4 +1,6 @@
 // Central error handler – add as LAST middleware in server.js
+const { duplicateKeyMessage } = require('../utils/mongoDuplicateKey');
+
 const errorHandler = (err, req, res, next) => {
   let error = { ...err };
   error.message = err.message;
@@ -9,10 +11,9 @@ const errorHandler = (err, req, res, next) => {
     return res.status(404).json({ success: false, message: error.message });
   }
 
-  // Mongoose duplicate key (e.g. duplicate email)
+  // Mongoose duplicate key (email, googleId, etc.)
   if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
-    error.message = `${field.charAt(0).toUpperCase() + field.slice(1)} already exists`;
+    error.message = duplicateKeyMessage(err);
     return res.status(400).json({ success: false, message: error.message });
   }
 

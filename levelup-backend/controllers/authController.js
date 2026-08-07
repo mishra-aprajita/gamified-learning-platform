@@ -1,5 +1,8 @@
 const jwt  = require('jsonwebtoken');
 const User = require('../models/User');
+const { duplicateKeyMessage } = require('../utils/mongoDuplicateKey');
+
+const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 
 // ── Generate JWT token ───────────────────────
 const generateToken = (id) =>
@@ -32,6 +35,32 @@ const sendToken = (user, statusCode, res) => {
   });
 };
 
+const normalizeEmail = (email) => String(email || '').toLowerCase().trim();
+
+const validateRegisterInput = ({ name, email, password }) => {
+  const trimmedName = String(name || '').trim();
+  if (!trimmedName) {
+    return { ok: false, status: 400, message: 'Name is required' };
+  }
+  if (trimmedName.length > 50) {
+    return { ok: false, status: 400, message: 'Name cannot exceed 50 characters' };
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    return { ok: false, status: 400, message: 'Email is required' };
+  }
+  if (!EMAIL_REGEX.test(normalizedEmail)) {
+    return { ok: false, status: 400, message: 'Please enter a valid email' };
+  }
+
+  if (!password || String(password).length < 6) {
+    return { ok: false, status: 400, message: 'Password must be at least 6 characters' };
+  }
+
+  return { ok: true, trimmedName, normalizedEmail };
+};
+
 // ────────────────────────────────────────────
 // @route  POST /api/auth/google
 // @desc   Login or register via Google Sign-In
@@ -45,7 +74,6 @@ exports.googleLogin = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Missing Google credential' });
     }
 
-    // Verify the ID token directly with Google (no extra npm package needed)
     const verifyRes = await fetch(
       `https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`
     );
@@ -55,61 +83,93 @@ exports.googleLogin = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Invalid Google token' });
     }
 
-    // Confirm the token was issued for OUR app, not someone else's
     if (process.env.GOOGLE_CLIENT_ID && payload.aud !== process.env.GOOGLE_CLIENT_ID) {
       return res.status(401).json({ success: false, message: 'Google token was not issued for this app' });
     }
 
-    const { sub: googleId, email, name, picture } = payload;
+    const googleId = payload.sub;
+    const email = normalizeEmail(payload.email);
+    const name = payload.name || email.split('@')[0];
+    const picture = payload.picture || '';
 
-    // Find by googleId first, then fall back to matching email (account linking)
     let user = await User.findOne({ googleId });
     if (!user) {
-      user = await User.findOne({ email: email.toLowerCase() });
+      user = await User.findOne({ email }).select('+password');
       if (user) {
-        // Existing local account with same email -> link Google to it
+        if (user.password && !user.googleId) {
+          return res.status(409).json({
+            success: false,
+            message: 'This email is already registered using password. Sign in with email and password.',
+          });
+        }
+
         user.googleId = googleId;
         user.authProvider = 'google';
-        if (!user.avatar) user.avatar = picture || '';
+        if (!user.avatar && picture) user.avatar = picture;
         await user.save();
       }
     }
 
     if (!user) {
-      // Brand new user via Google
       user = await User.create({
-        name: name || email.split('@')[0],
-        email: email.toLowerCase(),
+        name,
+        email,
         googleId,
         authProvider: 'google',
-        avatar: picture || '',
+        avatar: picture,
       });
     }
 
     sendToken(user, 200, res);
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ success: false, message: duplicateKeyMessage(err) });
+    }
     next(err);
   }
 };
 
 // ────────────────────────────────────────────
 // @route  POST /api/auth/register
-// @desc   Register new user
+// @desc   Register new user (local email/password only)
 // @access Public
 // ────────────────────────────────────────────
 exports.register = async (req, res, next) => {
   try {
     const { name, email, password, bio, skills } = req.body;
 
-    // Check duplicate email
-    const existing = await User.findOne({ email });
+    const validation = validateRegisterInput({ name, email, password });
+    if (!validation.ok) {
+      return res.status(validation.status).json({ success: false, message: validation.message });
+    }
+
+    const { trimmedName, normalizedEmail } = validation;
+
+    const existing = await User.findOne({ email: normalizedEmail }).select('+password');
     if (existing) {
+      if (existing.googleId && !existing.password) {
+        return res.status(409).json({
+          success: false,
+          message: 'This email is registered with Google. Please sign in with Google.',
+        });
+      }
       return res.status(400).json({ success: false, message: 'Email already registered' });
     }
 
-    const user = await User.create({ name, email, password, bio, skills });
+    const user = await User.create({
+      name: trimmedName,
+      email: normalizedEmail,
+      password,
+      authProvider: 'local',
+      ...(bio != null && bio !== '' ? { bio: String(bio).trim() } : {}),
+      ...(Array.isArray(skills) ? { skills } : {}),
+    });
+
     sendToken(user, 201, res);
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ success: false, message: duplicateKeyMessage(err) });
+    }
     next(err);
   }
 };
@@ -122,15 +182,22 @@ exports.register = async (req, res, next) => {
 exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return res.status(400).json({ success: false, message: 'Please enter email and password' });
     }
 
-    // Include password field (excluded by default)
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
     if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
+    }
+
+    if (!user.password) {
+      return res.status(401).json({
+        success: false,
+        message: 'This account uses Google sign-in. Please continue with Google.',
+      });
     }
 
     const isMatch = await user.matchPassword(password);

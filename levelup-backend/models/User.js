@@ -37,7 +37,8 @@ const UserSchema = new mongoose.Schema(
       required: function () { return !this.googleId; }, // not required for Google sign-in users
     },
     googleId: {
-      type: String, unique: true, sparse: true,
+      type: String,
+      // unique sparse index — see UserSchema.index below
     },
     authProvider: {
       type: String, enum: ['local', 'google'], default: 'local',
@@ -87,9 +88,20 @@ const UserSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Sparse unique index — must match Atlas; drop legacy non-sparse googleId_1 if register fails
+UserSchema.index({ googleId: 1 }, { unique: true, sparse: true });
+
+// Never persist empty googleId (would break sparse unique index)
+UserSchema.pre('validate', function (next) {
+  if (this.googleId === '' || this.googleId == null) {
+    this.googleId = undefined;
+  }
+  next();
+});
+
 // ── Hash password before saving ──────────────
 UserSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();
