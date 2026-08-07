@@ -149,6 +149,6 @@ server.listen(PORT, () => {
   console.log(`\n🚀 XPify server running on http://localhost:${PORT}`);
   console.log(`📡 Socket.io ready`);
   console.log(`🌍 Client URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}`);
-  const apiKey = process.env.OPENAI_API_KEY;
-  console.log(`🔑 OPENAI_API_KEY: ${apiKey ? (apiKey === 'sk-your-openai-api-key-here' ? 'Placeholder (unconfigured)' : 'Loaded (ends with ' + apiKey.slice(-4) + ')') : 'Missing'}\n`);
+  const apiKey = process.env.GEMINI_API_KEY;
+  console.log(`🔑 GEMINI_API_KEY: ${apiKey ? (apiKey === 'your-gemini-api-key-here' ? 'Placeholder (unconfigured)' : 'Loaded (ends with ' + apiKey.slice(-4) + ')') : 'Missing'}\n`);
 });
