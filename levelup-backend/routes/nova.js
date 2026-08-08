@@ -2,9 +2,8 @@
 const express = require('express');
 const router  = express.Router();
 const { protect } = require('../middleware/auth');
-const { chatWithNova, getDailyTip } = require('../controllers/novaController');
+const { chatWithNova } = require('../controllers/novaController');
 
-router.post('/chat',       protect, chatWithNova);
-router.get ('/daily-tip',  protect, getDailyTip);
+router.post('/chat', protect, chatWithNova);
 
 module.exports = router;

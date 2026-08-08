@@ -1,5 +1,6 @@
 // ─────────────────────────────────────────────────────────────
 //  XPify Backend  –  server.js
+//  Production-ready Express server with crash-proof Nova API
 //  Run:  npm run dev   (development)
 //        npm start     (production)
 // ─────────────────────────────────────────────────────────────
@@ -34,6 +35,9 @@ const novaRoutes               = require('./routes/nova');
 connectDB().then(() => {
   seedRoadmaps();
   seedQuestions();
+}).catch(err => {
+  console.error('Database connection failed:', err.message);
+  // Don't crash - allow server to start for health checks
 });
 
 // ── Express App ──────────────────────────────
@@ -110,9 +114,21 @@ io.on('connection', (socket) => {
 app.use((req, res, next) => { req.io = io; next(); });
 
 // ── Middleware ───────────────────────────────
+// CORS configuration for Vercel frontend
 app.use(cors({ origin: corsOriginDelegate, credentials: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Parse JSON bodies (crucial for POST /api/nova/chat)
+app.use(express.json({ limit: '10mb' }));
+
+// Parse URL-encoded bodies
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${req.method} ${req.path}`);
+  next();
+});
 
 // ── API Routes ───────────────────────────────
 app.use('/api/auth',     authRoutes);
@@ -129,7 +145,15 @@ app.use('/api/nova',     novaRoutes);
 
 // ── Health check ─────────────────────────────
 app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: '⚡ XPify API is running!', timestamp: new Date() });
+  res.json({ 
+    success: true, 
+    message: '⚡ XPify API is running!', 
+    timestamp: new Date(),
+    nova: {
+      configured: require('./services/gemini').isConfigured(),
+      model: require('./services/gemini').GEMINI_MODEL
+    }
+  });
 });
 
 // ── 404 handler ──────────────────────────────
@@ -141,17 +165,33 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 // ── Start Cron Jobs ──────────────────────────
-startStreakCron();
+try {
+  startStreakCron();
+} catch (err) {
+  console.error('Failed to start cron jobs:', err.message);
+  // Don't crash the server
+}
 
 // ── Start Server ─────────────────────────────
-const PORT     = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 const geminiSvc = require('./services/gemini');
+
 server.listen(PORT, () => {
-  const diag = geminiSvc.getDiagnostics();
   console.log(`\n🚀 XPify server running on http://localhost:${PORT}`);
   console.log(`📡 Socket.io ready`);
   console.log(`🌍 Client URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}`);
-  console.log(`🤖 Gemini model : ${diag.model}  (${diag.apiVersion})`);
-  console.log(`🔑 GEMINI_API_KEY: ${diag.keyStatus}`);
-  console.log(`📦 Node         : ${diag.nodeVersion}  |  Env: ${diag.environment}\n`);
+  console.log(`🤖 Gemini model: ${geminiSvc.GEMINI_MODEL}`);
+  console.log(`🔑 GEMINI_API_KEY: ${geminiSvc.isConfigured() ? '✅ Configured' : '❌ Missing/Placeholder'}`);
+  console.log(`📦 Node version: ${process.version} | Env: ${process.env.NODE_ENV || 'development'}\n`);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Promise Rejection:', err.message);
+  // Don't crash - log and continue
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err.message);
+  // Don't crash - log and continue
 });

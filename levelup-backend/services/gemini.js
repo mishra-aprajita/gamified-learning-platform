@@ -1,57 +1,51 @@
 // services/gemini.js
 // ─────────────────────────────────────────────────────────────
-//  Centralised Google Gemini AI service for XPify.
-//  All AI logic lives here — no duplicated SDK init anywhere.
+//  Production-ready Google Gemini AI service for XPify.
+//  Crash-proof, rate-limit aware, strict error handling.
 //
 //  SDK:   @google/generative-ai (official Google SDK)
-//  Model: gemini-2.0-flash  (stable, fast, cost-effective)
+//  Model: gemini-1.5-flash (stable, production-safe)
 // ─────────────────────────────────────────────────────────────
 'use strict';
 
-const path = require('path');
-const fs   = require('fs');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // ── Constants ────────────────────────────────────────────────
-// Stable models as of 2026-08 per https://ai.google.dev/gemini-api/docs/models
-// gemini-2.0-flash → fastest stable; gemini-2.5-flash → most capable stable
-const GEMINI_MODEL   = 'gemini-2.0-flash';
-const GEMINI_API_VER = 'v1beta';
+// Using gemini-1.5-flash for stability (not beta models)
+const GEMINI_MODEL = 'gemini-1.5-flash';
 
 // ── SDK Instance (lazy init) ─────────────────────────────────
 let genAI = null;
 
 /**
  * Initialize the Google Generative AI SDK with the API key from environment.
- * Throws if GEMINI_API_KEY is missing or invalid.
+ * Returns null if key is missing (graceful degradation).
  */
 const initSDK = () => {
   if (genAI) return genAI; // Already initialized
 
   const apiKey = process.env.GEMINI_API_KEY;
+  
+  // Graceful handling of missing/invalid keys
   if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-    const err = new Error('GEMINI_API_KEY is missing or invalid');
-    err.code = 'MISSING_API_KEY';
-    err.source = 'gemini-service';
-    throw err;
+    console.warn('[Gemini] GEMINI_API_KEY is missing or invalid');
+    return null;
   }
 
-  if (apiKey === 'your-gemini-api-key-here' || apiKey === 'YOUR_GEMINI_API_KEY') {
-    const err = new Error('GEMINI_API_KEY is still set to placeholder value');
-    err.code = 'PLACEHOLDER_API_KEY';
-    err.source = 'gemini-service';
-    throw err;
+  if (apiKey === 'your-gemini-api-key-here' || 
+      apiKey === 'YOUR_GEMINI_API_KEY' ||
+      apiKey === 'your_gemini_api_key_here') {
+    console.warn('[Gemini] GEMINI_API_KEY is still set to placeholder value');
+    return null;
   }
 
   try {
     genAI = new GoogleGenerativeAI(apiKey);
+    console.log('[Gemini] SDK initialized successfully');
     return genAI;
   } catch (error) {
-    const err = new Error(`Failed to initialize Gemini SDK: ${error.message}`);
-    err.code = 'SDK_INIT_FAILED';
-    err.source = 'gemini-service';
-    err.originalError = error;
-    throw err;
+    console.error('[Gemini] Failed to initialize SDK:', error.message);
+    return null;
   }
 };
 
@@ -61,100 +55,105 @@ const initSDK = () => {
  */
 const isConfigured = () => {
   const key = process.env.GEMINI_API_KEY;
-  return typeof key === 'string' && key.length > 0 && key !== 'your-gemini-api-key-here' && key !== 'YOUR_GEMINI_API_KEY';
-};
-
-/**
- * Returns the SDK/runtime diagnostics object.
- * Secrets are never exposed — only the last 4 chars of the key are shown.
- */
-const getDiagnostics = () => {
-  const key     = process.env.GEMINI_API_KEY || '';
-  const envPath = path.resolve(__dirname, '../.env');
-  return {
-    sdk:         '@google/generative-ai',
-    sdkVersion:  require('@google/generative-ai/package.json').version,
-    model:       GEMINI_MODEL,
-    apiVersion:  GEMINI_API_VER,
-    nodeVersion: process.version,
-    environment: process.env.NODE_ENV || 'development',
-    envFilePresent: fs.existsSync(envPath),
-    keyStatus:   !key
-      ? 'missing'
-      : key === 'your-gemini-api-key-here' || key === 'YOUR_GEMINI_API_KEY'
-        ? 'placeholder'
-        : `loaded (ends …${key.slice(-4)})`,
-  };
+  return typeof key === 'string' && 
+         key.length > 0 && 
+         key !== 'your-gemini-api-key-here' && 
+         key !== 'YOUR_GEMINI_API_KEY' &&
+         key !== 'your_gemini_api_key_here';
 };
 
 // ── Core generator ───────────────────────────────────────────
 /**
- * Calls the Gemini generateContent using the official SDK.
+ * Calls the Gemini generateContent using the official SDK with strict format.
+ * Always returns a string (never throws), using fallbacks on any error.
  *
  * @param {object} opts
  * @param {string}   opts.systemPrompt - Nova's personality/instructions
- * @param {Array}    opts.contents     - Array of {role, parts:[{text}]} turns
+ * @param {string}   opts.message      - Current user message
  * @param {number}  [opts.maxTokens]   - maxOutputTokens (default 200)
  * @param {number}  [opts.temperature] - sampling temperature (default 0.7)
- * @returns {Promise<string>}          - the model's text reply
- * @throws  {Error}                    - structured error with `.code` and `.source`
+ * @returns {Promise<string>}          - the model's text reply or fallback
  */
-const generate = async ({ systemPrompt, contents, maxTokens = 200, temperature = 0.7 }) => {
+const generate = async ({ systemPrompt, message, maxTokens = 200, temperature = 0.7 }) => {
   try {
     const ai = initSDK();
+    if (!ai) {
+      console.warn('[Gemini] SDK not initialized, using fallback');
+      return getFallbackResponse('not_configured');
+    }
+
     const model = ai.getGenerativeModel({
       model: GEMINI_MODEL,
       systemInstruction: systemPrompt,
     });
 
-    // Convert contents array to SDK format
-    const history = contents.slice(0, -1).map((item) => ({
-      role: item.role === 'model' ? 'model' : 'user',
-      parts: [{ text: item.parts[0].text }],
-    }));
-
-    const currentMessage = contents[contents.length - 1].parts[0].text;
-
-    // Start chat with history
-    const chat = model.startChat({
-      history,
+    // Strict SDK format as required: generateContent with contents array
+    const result = await model.generateContent({
+      contents: [{ 
+        role: "user", 
+        parts: [{ text: message }] 
+      }],
       generationConfig: {
         temperature,
         maxOutputTokens: maxTokens,
       },
     });
 
-    const result = await chat.sendMessage(currentMessage);
     const response = await result.response;
     const text = response.text();
 
     if (!text || text.trim().length === 0) {
-      const err = new Error('Gemini returned an empty response');
-      err.code = 'EMPTY_RESPONSE';
-      err.source = 'gemini-service';
-      throw err;
+      console.warn('[Gemini] Empty response from API');
+      return getFallbackResponse('empty_response');
     }
 
+    console.log('[Gemini] Successfully generated response');
     return text.trim();
+    
   } catch (error) {
-    // Wrap SDK errors in our standard error format
-    if (error.source) {
-      throw error; // Already formatted
+    // Handle specific error types
+    const errorMessage = error.message || String(error);
+    
+    if (errorMessage.includes('quota') || 
+        errorMessage.includes('rate limit') || 
+        errorMessage.includes('429')) {
+      console.warn('[Gemini] Quota/rate limit exceeded:', errorMessage);
+      return getFallbackResponse('rate_limit');
     }
-
-    const err = new Error(error.message || 'Gemini API request failed');
-    err.code = error.code || 'GEMINI_API_ERROR';
-    err.source = 'gemini-api';
-    err.originalError = error;
-    throw err;
+    
+    if (errorMessage.includes('API key') || 
+        errorMessage.includes('authentication') ||
+        errorMessage.includes('401') ||
+        errorMessage.includes('403')) {
+      console.error('[Gemini] Authentication error:', errorMessage);
+      return getFallbackResponse('auth_error');
+    }
+    
+    // Generic error
+    console.error('[Gemini] API error:', errorMessage);
+    return getFallbackResponse('api_error');
   }
+};
+
+/**
+ * Returns appropriate fallback messages based on error type.
+ * Never crashes, always returns a user-friendly string.
+ */
+const getFallbackResponse = (errorType) => {
+  const fallbacks = {
+    not_configured: 'Nova is not configured yet. Please check back later!',
+    empty_response: 'Nova seems to be lost in thought. Please try again.',
+    rate_limit: 'Nova is currently busy. Please try again in a moment.',
+    auth_error: 'Nova is having trouble connecting. Please try again.',
+    api_error: 'Nova is having trouble responding right now. Please try again.',
+  };
+  
+  return fallbacks[errorType] || fallbacks.api_error;
 };
 
 // ── Exports ──────────────────────────────────────────────────
 module.exports = {
   isConfigured,
-  getDiagnostics,
   generate,
   GEMINI_MODEL,
-  GEMINI_API_VER,
 };
