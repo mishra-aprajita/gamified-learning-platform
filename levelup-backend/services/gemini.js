@@ -11,8 +11,10 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // ── Constants ────────────────────────────────────────────────
-// Using gemini-1.5-flash for stability (not beta models)
-const GEMINI_MODEL = 'gemini-1.5-flash';
+// IMPORTANT: Using gemini-pro for SDK v1beta compatibility
+// SDK version ~0.24.x uses v1beta API, which requires gemini-pro
+// gemini-1.5-flash causes 404 errors with current SDK version
+const GEMINI_MODEL = 'gemini-pro';
 
 // ── SDK Instance (lazy init) ─────────────────────────────────
 let genAI = null;
