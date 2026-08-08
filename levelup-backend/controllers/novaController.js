@@ -40,6 +40,7 @@ const sendUnconfiguredError = (res) => {
 /**
  * Maps an error thrown by services/gemini.js to an HTTP response.
  * Exposes full details in development; redacts in production.
+ * Includes fallback message as per requirements.
  */
 const sendGeminiError = (res, err) => {
   console.error('[Nova] Gemini API error:', err.message, err.code || '');
@@ -47,7 +48,7 @@ const sendGeminiError = (res, err) => {
     success: false,
     message: isDev()
       ? err.message
-      : 'Nova could not respond right now. Please try again.',
+      : 'Nova is having trouble responding right now. Please try again.',
     ...(isDev() ? {
       source:   err.source  || 'gemini-api',
       code:     err.code    || null,

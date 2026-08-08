@@ -3,21 +3,57 @@
 //  Centralised Google Gemini AI service for XPify.
 //  All AI logic lives here — no duplicated SDK init anywhere.
 //
-//  SDK:   native fetch (Node 18+) — no 3rd-party Gemini SDK
+//  SDK:   @google/generative-ai (official Google SDK)
 //  Model: gemini-2.0-flash  (stable, fast, cost-effective)
-//  API:   Google Generative Language REST API v1beta
 // ─────────────────────────────────────────────────────────────
 'use strict';
 
 const path = require('path');
 const fs   = require('fs');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // ── Constants ────────────────────────────────────────────────
 // Stable models as of 2026-08 per https://ai.google.dev/gemini-api/docs/models
 // gemini-2.0-flash → fastest stable; gemini-2.5-flash → most capable stable
 const GEMINI_MODEL   = 'gemini-2.0-flash';
 const GEMINI_API_VER = 'v1beta';
-const GEMINI_BASE    = 'https://generativelanguage.googleapis.com';
+
+// ── SDK Instance (lazy init) ─────────────────────────────────
+let genAI = null;
+
+/**
+ * Initialize the Google Generative AI SDK with the API key from environment.
+ * Throws if GEMINI_API_KEY is missing or invalid.
+ */
+const initSDK = () => {
+  if (genAI) return genAI; // Already initialized
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+    const err = new Error('GEMINI_API_KEY is missing or invalid');
+    err.code = 'MISSING_API_KEY';
+    err.source = 'gemini-service';
+    throw err;
+  }
+
+  if (apiKey === 'your-gemini-api-key-here' || apiKey === 'YOUR_GEMINI_API_KEY') {
+    const err = new Error('GEMINI_API_KEY is still set to placeholder value');
+    err.code = 'PLACEHOLDER_API_KEY';
+    err.source = 'gemini-service';
+    throw err;
+  }
+
+  try {
+    genAI = new GoogleGenerativeAI(apiKey);
+    return genAI;
+  } catch (error) {
+    const err = new Error(`Failed to initialize Gemini SDK: ${error.message}`);
+    err.code = 'SDK_INIT_FAILED';
+    err.source = 'gemini-service';
+    err.originalError = error;
+    throw err;
+  }
+};
 
 // ── Config helpers ───────────────────────────────────────────
 /**
@@ -25,15 +61,8 @@ const GEMINI_BASE    = 'https://generativelanguage.googleapis.com';
  */
 const isConfigured = () => {
   const key = process.env.GEMINI_API_KEY;
-  return typeof key === 'string' && key.length > 0 && key !== 'your-gemini-api-key-here';
+  return typeof key === 'string' && key.length > 0 && key !== 'your-gemini-api-key-here' && key !== 'YOUR_GEMINI_API_KEY';
 };
-
-/**
- * Builds the full REST endpoint URL for generateContent.
- * Pattern: /v1beta/models/{model}:generateContent?key={apiKey}
- */
-const buildUrl = () =>
-  `${GEMINI_BASE}/${GEMINI_API_VER}/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
 
 /**
  * Returns the SDK/runtime diagnostics object.
@@ -43,8 +72,8 @@ const getDiagnostics = () => {
   const key     = process.env.GEMINI_API_KEY || '';
   const envPath = path.resolve(__dirname, '../.env');
   return {
-    sdk:         'native-fetch',
-    sdkVersion:  'N/A (no SDK)',
+    sdk:         '@google/generative-ai',
+    sdkVersion:  require('@google/generative-ai/package.json').version,
     model:       GEMINI_MODEL,
     apiVersion:  GEMINI_API_VER,
     nodeVersion: process.version,
@@ -52,7 +81,7 @@ const getDiagnostics = () => {
     envFilePresent: fs.existsSync(envPath),
     keyStatus:   !key
       ? 'missing'
-      : key === 'your-gemini-api-key-here'
+      : key === 'your-gemini-api-key-here' || key === 'YOUR_GEMINI_API_KEY'
         ? 'placeholder'
         : `loaded (ends …${key.slice(-4)})`,
   };
@@ -60,7 +89,7 @@ const getDiagnostics = () => {
 
 // ── Core generator ───────────────────────────────────────────
 /**
- * Calls the Gemini generateContent REST endpoint.
+ * Calls the Gemini generateContent using the official SDK.
  *
  * @param {object} opts
  * @param {string}   opts.systemPrompt - Nova's personality/instructions
@@ -68,46 +97,57 @@ const getDiagnostics = () => {
  * @param {number}  [opts.maxTokens]   - maxOutputTokens (default 200)
  * @param {number}  [opts.temperature] - sampling temperature (default 0.7)
  * @returns {Promise<string>}          - the model's text reply
- * @throws  {Error}                    - structured error with `.code` and `.details`
+ * @throws  {Error}                    - structured error with `.code` and `.source`
  */
 const generate = async ({ systemPrompt, contents, maxTokens = 200, temperature = 0.7 }) => {
-  const url  = buildUrl();
-  const body = {
-    contents,
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    generationConfig: {
-      temperature,
-      maxOutputTokens: maxTokens,
-    },
-  };
+  try {
+    const ai = initSDK();
+    const model = ai.getGenerativeModel({
+      model: GEMINI_MODEL,
+      systemInstruction: systemPrompt,
+    });
 
-  const res  = await fetch(url, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(body),
-  });
+    // Convert contents array to SDK format
+    const history = contents.slice(0, -1).map((item) => ({
+      role: item.role === 'model' ? 'model' : 'user',
+      parts: [{ text: item.parts[0].text }],
+    }));
 
-  const data = await res.json();
+    const currentMessage = contents[contents.length - 1].parts[0].text;
 
-  if (!res.ok) {
-    // Surface the exact Gemini error message to the caller
-    const err     = new Error(data?.error?.message || 'Gemini API request failed');
-    err.code      = data?.error?.code    || res.status;
-    err.status    = data?.error?.status  || 'UNKNOWN';
-    err.details   = data?.error?.details || [];
-    err.source    = 'gemini-api';
+    // Start chat with history
+    const chat = model.startChat({
+      history,
+      generationConfig: {
+        temperature,
+        maxOutputTokens: maxTokens,
+      },
+    });
+
+    const result = await chat.sendMessage(currentMessage);
+    const response = await result.response;
+    const text = response.text();
+
+    if (!text || text.trim().length === 0) {
+      const err = new Error('Gemini returned an empty response');
+      err.code = 'EMPTY_RESPONSE';
+      err.source = 'gemini-service';
+      throw err;
+    }
+
+    return text.trim();
+  } catch (error) {
+    // Wrap SDK errors in our standard error format
+    if (error.source) {
+      throw error; // Already formatted
+    }
+
+    const err = new Error(error.message || 'Gemini API request failed');
+    err.code = error.code || 'GEMINI_API_ERROR';
+    err.source = 'gemini-api';
+    err.originalError = error;
     throw err;
   }
-
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    const err   = new Error('Gemini returned an empty response');
-    err.code    = 'EMPTY_RESPONSE';
-    err.source  = 'gemini-service';
-    throw err;
-  }
-
-  return text.trim();
 };
 
 // ── Exports ──────────────────────────────────────────────────
