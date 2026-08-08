@@ -1,8 +1,8 @@
 // src/components/StreakCalendar.jsx
 import React from 'react';
 
-// Generates a deterministic pseudo-history so the grid looks alive
-// even though we only track the current streak count from the backend.
+// Only marks the real active-streak days as green.
+// No random/simulated activity before the streak.
 function buildHistory(streakCount, totalCells = 91) {
   const cells = [];
   for (let i = 0; i < totalCells; i++) {
@@ -12,9 +12,8 @@ function buildHistory(streakCount, totalCells = 91) {
       const intensity = (i % 5 === 0) ? 3 : (i % 3 === 0) ? 2 : 1;
       cells.push(intensity);
     } else {
-      // Random sparse activity before the streak started
-      const r = (i * 7919) % 10; // deterministic pseudo-random
-      cells.push(r > 7 ? (r > 8 ? 2 : 1) : 0);
+      // No streak here -> no fake activity
+      cells.push(0);
     }
   }
   return cells;

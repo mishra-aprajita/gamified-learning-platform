@@ -1,6 +1,7 @@
+
 // src/pages/Reports.jsx
-import React, { useState, useEffect } from 'react';
-import { reportAPI } from '../services/api';
+import React, { useEffect } from 'react';
+import { useReportCache } from '../context/ReportCacheContext';
 import Mascot from '../components/Mascot';
 
 function ChangeBadge({ value }) {
@@ -14,21 +15,13 @@ function ChangeBadge({ value }) {
 }
 
 export default function Reports() {
-  const [report,  setReport]  = useState(null);
-  const [monthly, setMonthly] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { report, monthly, loading, fetchReport } = useReportCache();
 
   useEffect(() => {
-    Promise.all([reportAPI.getWeekly(), reportAPI.getMonthly()])
-      .then(([weeklyRes, monthlyRes]) => {
-        setReport(weeklyRes);
-        setMonthly(monthlyRes.months);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    fetchReport(); // instant if cached & fresh; fetches silently in background if stale
+  }, [fetchReport]);
 
-  if (loading) return (
+  if (loading && !report) return (
     <div className="page" style={{ textAlign: 'center', paddingTop: 80 }}>
       <Mascot size={80} mood="sleepy" />
       <div style={{ color: 'var(--text2)', marginTop: 16 }}>Nova is building your weekly report...</div>
@@ -48,7 +41,6 @@ export default function Reports() {
   return (
     <div className="page" style={{ maxWidth: 900, margin: '0 auto' }}>
 
-      {/* Header */}
       <div className="level-hero" style={{ marginBottom: 22 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap' }}>
           <div style={{ textAlign: 'center' }}>
@@ -67,7 +59,6 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* Top stat row */}
       <div className="grid grid-4" style={{ marginBottom: 22 }}>
         <div className="stat-tile">
           <div className="stat-tile-icon" style={{ background: 'rgba(139,107,255,0.12)', color: 'var(--violet)' }}>⚡</div>
@@ -87,7 +78,6 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* Weekly XP chart */}
       <div className="card" style={{ marginBottom: 22 }}>
         <div className="section-title" style={{ marginBottom: 16 }}>Daily XP This Week</div>
         <div className="mini-chart">
@@ -109,7 +99,6 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* Feature breakdown grid */}
       <div className="grid grid-2" style={{ marginBottom: 22 }}>
         <div className="card">
           <div className="section-title" style={{ marginBottom: 14 }}>📝 Learning Posts</div>
@@ -139,7 +128,6 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* Goals completed */}
       {summary.goalsCompleted > 0 && (
         <div className="card" style={{ marginBottom: 22, background: 'rgba(74,222,154,0.06)', borderColor: 'rgba(74,222,154,0.3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -152,7 +140,6 @@ export default function Reports() {
         </div>
       )}
 
-      {/* Monthly trend */}
       <div className="card">
         <div className="section-title" style={{ marginBottom: 16 }}>6-Month XP Trend</div>
         <div className="mini-chart" style={{ height: 100 }}>

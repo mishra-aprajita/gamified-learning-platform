@@ -22,6 +22,7 @@ import Badges            from './pages/Badges';
 import Mascot         from './components/Mascot';
 import NovaChat         from './components/NovaChat';
 import PracticeHub from './pages/PracticeHub';
+import { ReportCacheProvider } from './context/ReportCacheContext';
 
 function AppInner() {
   const { user, loading } = useAuth();
@@ -99,7 +100,9 @@ function AppInner() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppInner />
+      <ReportCacheProvider>
+        <AppInner />
+      </ReportCacheProvider>
     </AuthProvider>
   );
 }
