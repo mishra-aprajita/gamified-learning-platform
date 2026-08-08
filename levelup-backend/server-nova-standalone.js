@@ -9,16 +9,15 @@ require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 const express = require('express');
 const cors = require('cors');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // ─────────────────────────────────────────────────────────────
 //  CONFIGURATION
 // ─────────────────────────────────────────────────────────────
 
-// IMPORTANT: Using gemini-pro for SDK v1beta compatibility
-// SDK version ~0.24.x uses v1beta API, which requires gemini-pro
-// gemini-1.5-flash causes 404 errors with current SDK version
-const GEMINI_MODEL = 'gemini-pro';
+// Using stable gemini-1.5-flash model with v1 API endpoint
+const GEMINI_MODEL = 'gemini-1.5-flash';
+const GEMINI_API_VERSION = 'v1';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com';
 
 const NOVA_SYSTEM_PROMPT = `You are Nova, a friendly and encouraging study companion inside a student learning app called XPify.
 Your job is to give short, practical, motivating study tips and answer learning-related questions
@@ -27,48 +26,8 @@ Keep replies under 120 words, use a warm and energetic tone, and occasionally us
 Never answer questions unrelated to learning, studying, or productivity — gently redirect back to studying instead.`;
 
 // ─────────────────────────────────────────────────────────────
-//  GEMINI SERVICE
+//  GEMINI SERVICE (Direct REST API - No SDK)
 // ─────────────────────────────────────────────────────────────
-
-let genAI = null;
-
-/**
- * Initialize the Google Generative AI SDK with graceful error handling
- * Returns null if key is missing (graceful degradation)
- */
-const initGeminiSDK = () => {
-  if (genAI) return genAI;
-
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  // Check for missing or invalid API keys
-  if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-    console.warn('[Nova] ⚠️  GEMINI_API_KEY is missing or invalid');
-    return null;
-  }
-
-  // Check for placeholder values
-  const placeholders = [
-    'your-gemini-api-key-here',
-    'YOUR_GEMINI_API_KEY',
-    'your_gemini_api_key_here',
-    'AIzaSyDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-  ];
-
-  if (placeholders.includes(apiKey)) {
-    console.warn('[Nova] ⚠️  GEMINI_API_KEY is still set to placeholder value');
-    return null;
-  }
-
-  try {
-    genAI = new GoogleGenerativeAI(apiKey);
-    console.log('[Nova] ✅ Gemini SDK initialized successfully');
-    return genAI;
-  } catch (error) {
-    console.error('[Nova] ❌ Failed to initialize Gemini SDK:', error.message);
-    return null;
-  }
-};
 
 /**
  * Check if Gemini is properly configured
@@ -84,43 +43,82 @@ const isGeminiConfigured = () => {
 };
 
 /**
- * Generate AI response using Gemini API with strict error handling
+ * Build the complete REST API URL for Gemini
+ */
+const buildApiUrl = () => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  return `${GEMINI_BASE_URL}/${GEMINI_API_VERSION}/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+};
+
+/**
+ * Generate AI response using direct REST API call (no SDK)
  * ALWAYS returns a string (never throws), using fallbacks on any error
  */
 const generateNovaResponse = async (message) => {
   try {
-    const ai = initGeminiSDK();
-    
-    if (!ai) {
-      console.warn('[Nova] ⚠️  SDK not initialized, using fallback');
+    // Check API key
+    if (!isGeminiConfigured()) {
+      console.warn('[Nova] ⚠️  GEMINI_API_KEY is missing or invalid');
       return getFallbackResponse('not_configured');
     }
 
-    const model = ai.getGenerativeModel({
-      model: GEMINI_MODEL,
-      systemInstruction: NOVA_SYSTEM_PROMPT,
-    });
-
-    console.log('[Nova] 📤 Sending request to Gemini API...');
+    const url = buildApiUrl();
+    
+    console.log('[Nova] 📤 Sending REST request to Gemini API...');
     console.log('[Nova] 📝 Message:', message.substring(0, 100) + (message.length > 100 ? '...' : ''));
+    console.log('[Nova] 🔗 URL:', `${GEMINI_BASE_URL}/${GEMINI_API_VERSION}/models/${GEMINI_MODEL}:generateContent?key=***`);
 
-    // STRICT SDK FORMAT as required - no deprecated patterns
-    const result = await model.generateContent({
-      contents: [{ 
-        role: "user", 
-        parts: [{ text: message }] 
+    // Build request body according to Gemini REST API specification
+    const requestBody = {
+      contents: [{
+        role: "user",
+        parts: [{ text: message }]
       }],
+      systemInstruction: {
+        parts: [{ text: NOVA_SYSTEM_PROMPT }]
+      },
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 200,
+        maxOutputTokens: 200
+      }
+    };
+
+    // Make direct REST API call using native fetch
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
       },
+      body: JSON.stringify(requestBody)
     });
 
-    const response = await result.response;
-    const text = response.text();
+    const responseData = await response.json();
+
+    // Handle HTTP errors
+    if (!response.ok) {
+      const errorMessage = responseData?.error?.message || `HTTP ${response.status}`;
+      console.error('[Nova] ❌ API HTTP Error:', response.status, errorMessage);
+      
+      // Detect specific error types
+      if (response.status === 429 || errorMessage.includes('quota') || errorMessage.includes('rate limit')) {
+        return getFallbackResponse('rate_limit');
+      }
+      if (response.status === 401 || response.status === 403 || errorMessage.includes('API key')) {
+        return getFallbackResponse('auth_error');
+      }
+      if (response.status === 404 || errorMessage.includes('not found')) {
+        return getFallbackResponse('model_error');
+      }
+      
+      return getFallbackResponse('api_error');
+    }
+
+    // Extract text from Gemini response structure
+    const text = responseData?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!text || text.trim().length === 0) {
       console.warn('[Nova] ⚠️  Empty response from API');
+      console.log('[Nova] 📦 Response structure:', JSON.stringify(responseData).substring(0, 200));
       return getFallbackResponse('empty_response');
     }
 
@@ -131,13 +129,13 @@ const generateNovaResponse = async (message) => {
     
   } catch (error) {
     const errorMessage = error.message || String(error);
-    console.error('[Nova] ❌ API Error:', errorMessage);
+    console.error('[Nova] ❌ Request Error:', errorMessage);
+    console.error('[Nova] 📚 Stack trace:', error.stack);
     
-    // Detect specific error types for user-friendly messages
+    // Detect specific error types
     if (errorMessage.includes('quota') || 
         errorMessage.includes('rate limit') || 
         errorMessage.includes('429')) {
-      console.warn('[Nova] ⚠️  Quota/rate limit exceeded');
       return getFallbackResponse('rate_limit');
     }
     
@@ -145,14 +143,12 @@ const generateNovaResponse = async (message) => {
         errorMessage.includes('authentication') ||
         errorMessage.includes('401') ||
         errorMessage.includes('403')) {
-      console.error('[Nova] ⚠️  Authentication error');
       return getFallbackResponse('auth_error');
     }
 
-    if (errorMessage.includes('404') || 
-        errorMessage.includes('not found')) {
-      console.error('[Nova] ⚠️  Model/API endpoint not found');
-      return getFallbackResponse('model_error');
+    if (errorMessage.includes('ENOTFOUND') || 
+        errorMessage.includes('ECONNREFUSED')) {
+      return getFallbackResponse('network_error');
     }
 
     // Generic error fallback
@@ -323,7 +319,7 @@ app.listen(PORT, () => {
   console.log('='.repeat(60));
   console.log(`🌐 Server running on: http://localhost:${PORT}`);
   console.log(`🌍 Client URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}`);
-  console.log(`🤖 Gemini Model: ${GEMINI_MODEL}`);
+  console.log(`🤖 Gemini Model: ${GEMINI_MODEL} (${GEMINI_API_VERSION} API)`);
   console.log(`🔑 API Key Status: ${isGeminiConfigured() ? '✅ Configured' : '❌ Missing/Placeholder'}`);
   console.log(`📦 Node Version: ${process.version}`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);

@@ -180,7 +180,7 @@ server.listen(PORT, () => {
   console.log(`\n🚀 XPify server running on http://localhost:${PORT}`);
   console.log(`📡 Socket.io ready`);
   console.log(`🌍 Client URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}`);
-  console.log(`🤖 Gemini model: ${geminiSvc.GEMINI_MODEL}`);
+  console.log(`🤖 Gemini model: ${geminiSvc.GEMINI_MODEL} (REST API, no SDK)`);
   console.log(`🔑 GEMINI_API_KEY: ${geminiSvc.isConfigured() ? '✅ Configured' : '❌ Missing/Placeholder'}`);
   console.log(`📦 Node version: ${process.version} | Env: ${process.env.NODE_ENV || 'development'}\n`);
 });
