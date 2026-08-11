@@ -5,13 +5,14 @@ import { messageAPI } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import Avatar from '../components/Avatar';
 
-export default function Messages() {
+export default function Messages({ pendingChatUser, onPendingChatHandled }) {
   const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [activeId,      setActiveId]      = useState(null);
   const [messages,      setMessages]      = useState([]);
   const [msg,           setMsg]           = useState('');
   const [loading,       setLoading]       = useState(true);
+  const [search,        setSearch]        = useState('');
   const bottomRef = useRef(null);
 
   // Real-time: receive incoming messages
@@ -34,11 +35,29 @@ export default function Messages() {
     messageAPI.getConversations()
       .then(res => {
         setConversations(res.conversations);
-        if (res.conversations.length > 0) setActiveId(res.conversations[0].contact._id);
+        // Only auto-pick the first conversation if we're not about to open
+        // a specific person's chat from Community.
+        if (res.conversations.length > 0 && !pendingChatUser) {
+          setActiveId(res.conversations[0].contact._id);
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Someone was clicked "Message" on the Community page — open their chat,
+  // creating a fresh (empty) conversation entry if one doesn't exist yet.
+  useEffect(() => {
+    if (!pendingChatUser || loading) return;
+    setConversations(prev => {
+      if (prev.some(c => c.contact._id === pendingChatUser._id)) return prev;
+      return [{ contact: pendingChatUser, lastMessage: null, unreadCount: 0 }, ...prev];
+    });
+    setActiveId(pendingChatUser._id);
+    if (onPendingChatHandled) onPendingChatHandled();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingChatUser, loading]);
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -76,6 +95,9 @@ export default function Messages() {
 
   const activeConv = conversations.find(c => c.contact._id === activeId);
   const isOnline   = (id) => onlineUsers.includes(id);
+  const filteredConversations = conversations.filter(c =>
+    (c.contact.name || '').toLowerCase().includes(search.trim().toLowerCase())
+  );
 
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'calc(100vh - 70px)', color:'var(--text2)' }}>
@@ -91,13 +113,17 @@ export default function Messages() {
           <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:16, marginBottom:12 }}>Messages</div>
           <input style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--border)',
             borderRadius:8, padding:'8px 12px', color:'var(--text)', fontSize:13, outline:'none' }}
-            placeholder="Search..." />
+            placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         {conversations.length === 0 ? (
           <div style={{ padding:24, color:'var(--text2)', fontSize:14, textAlign:'center' }}>
             No conversations yet.<br />Message someone from Community!
           </div>
-        ) : conversations.map(c => (
+        ) : filteredConversations.length === 0 ? (
+          <div style={{ padding:24, color:'var(--text2)', fontSize:14, textAlign:'center' }}>
+            No conversations match "{search}".
+          </div>
+        ) : filteredConversations.map(c => (
           <div key={c.contact._id} className={`chat-item ${activeId===c.contact._id?'active':''}`}
             onClick={() => setActiveId(c.contact._id)}>
             <div className="avatar-wrap">
