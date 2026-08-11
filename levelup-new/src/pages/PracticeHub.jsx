@@ -318,7 +318,6 @@ export default function PracticeHub() {
   }
 
   const recentResources = recent.map(id => RESOURCES.find(r => r.id === id)).filter(Boolean);
-  const activeCat = CATEGORIES.find(c => c.id === category);
 
   return (
     <div style={{

@@ -737,11 +737,8 @@ const TYPE_COLORS = {
   Roadmap:   { bg: 'rgba(139,92,246,0.12)',  color: '#C4B5FD', border: 'rgba(139,92,246,0.2)'  },
 };
 
-// ── XP reward on completion ──────────────────────────────────────
-const ROADMAP_COMPLETE_BONUS_XP = 300;
-
 export default function Roadmap() {
-  const { user, updateUser } = useAuth();
+  const { user } = useAuth();
   const [roadmaps,    setRoadmaps]    = useState([]);
   const [myRoadmaps,  setMyRoadmaps]  = useState([]);
   const [activeId,    setActiveId]    = useState(null);
@@ -833,7 +830,6 @@ export default function Roadmap() {
     const catKey    = getCategoryKey(activeRoadmap);
     const meta      = ROADMAP_META[catKey] || ROADMAP_META.general;
     const phases    = getResources(activeRoadmap);
-    const progress  = myProgressFor(activeRoadmap._id);
     const { done, total } = countVisited(activeRoadmap._id, catKey);
     const pct = total ? Math.round((done / total) * 100) : 0;
 

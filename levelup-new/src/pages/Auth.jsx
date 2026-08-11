@@ -1,5 +1,5 @@
 // src/pages/Auth.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Mascot from '../components/Mascot';
 
@@ -42,7 +42,7 @@ export default function Auth({ initialMode = 'login', onBack = null }) {
   };
 
   // ── Handle the credential Google sends back ──
-  const handleGoogleResponse = async (response) => {
+  const handleGoogleResponse = useCallback(async (response) => {
     setError('');
     setLoading(true);
     try {
@@ -52,7 +52,7 @@ export default function Auth({ initialMode = 'login', onBack = null }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [googleLogin]);
 
   // ── Load Google's script and render the button ──
   useEffect(() => {
@@ -85,7 +85,7 @@ export default function Auth({ initialMode = 'login', onBack = null }) {
       script.onload = renderButton;
       document.body.appendChild(script);
     }
-  }, [mode]);
+  }, [mode, handleGoogleResponse]);
 
   return (
     <div className="auth-screen">
