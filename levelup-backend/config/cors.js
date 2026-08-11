@@ -1,6 +1,7 @@
 const DEFAULT_ORIGINS = [
   'https://gamified-learning-platform-ecru.vercel.app',
   'https://gamified-learning-platform-drhf.vercel.app',
+  'https://gamified-learning-platform-2t1yqqwg6.vercel.app',
   'http://localhost:3000',
 ];
 
