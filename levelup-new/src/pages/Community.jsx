@@ -5,7 +5,7 @@ import StudentCard from '../components/StudentCard';
 
 const LEVELS = ['All','Explorer','Builder','Hacker','Architect'];
 
-export default function Community({ setPage }) {
+export default function Community({ setPage, onStartChat }) {
   const [students,     setStudents]     = useState([]);
   const [search,       setSearch]       = useState('');
   const [levelFilter,  setLevelFilter]  = useState('All');
@@ -90,7 +90,14 @@ export default function Community({ setPage }) {
       ) : (
         <div className="grid grid-auto">
           {students.map((s,i) => (
-            <StudentCard key={s._id||i} student={normalizeStudent(s)} onMessage={() => setPage('messages')} />
+            <StudentCard
+              key={s._id||i}
+              student={normalizeStudent(s)}
+              onMessage={() => {
+                if (onStartChat) onStartChat({ _id: s._id, name: s.name, avatar: s.avatar });
+                else setPage('messages');
+              }}
+            />
           ))}
         </div>
       )}

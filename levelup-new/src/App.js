@@ -30,6 +30,9 @@ function AppInner() {
   const [collapsed,  setCollapsed]  = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [authView,   setAuthView]   = useState('landing'); // 'landing' | 'login' | 'register'
+  // The user clicked "Message" on someone in Community — carry that person
+  // over to the Messages page so it opens their chat directly.
+  const [pendingChatUser, setPendingChatUser] = useState(null);
 
   useEffect(() => {
     const handler = () => { if (window.innerWidth > 768) setMobileOpen(false); };
@@ -80,8 +83,8 @@ function AppInner() {
         {page === 'dashboard'   && <Dashboard   {...pageProps} />}
         {page === 'feed'        && <Feed        {...pageProps} />}
         {page === 'leaderboard' && <Leaderboard {...pageProps} />}
-        {page === 'community'   && <Community   {...pageProps} />}
-        {page === 'messages'    && <Messages    {...pageProps} />}
+        {page === 'community'   && <Community   {...pageProps} onStartChat={(u) => { setPendingChatUser(u); setPage('messages'); }} />}
+        {page === 'messages'    && <Messages    {...pageProps} pendingChatUser={pendingChatUser} onPendingChatHandled={() => setPendingChatUser(null)} />}
         {page === 'profile'     && <Profile     {...pageProps} />}
         {page === 'goals'       && <Goals       {...pageProps} />}
         {page === 'tasks'       && <Tasks       {...pageProps} />}
