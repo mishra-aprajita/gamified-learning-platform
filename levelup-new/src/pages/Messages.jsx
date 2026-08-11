@@ -43,6 +43,9 @@ export default function Messages({ pendingChatUser, onPendingChatHandled }) {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+    // Note: We intentionally don't include pendingChatUser in dependencies to prevent
+    // re-fetching conversations when a user is selected from Community. The second useEffect
+    // handles adding the pending user to the conversation list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

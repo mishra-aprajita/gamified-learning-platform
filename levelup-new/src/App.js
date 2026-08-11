@@ -1,5 +1,5 @@
 // src/App.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar     from './layout/Sidebar';
 import Topbar      from './layout/Topbar';
@@ -33,6 +33,11 @@ function AppInner() {
   // The user clicked "Message" on someone in Community — carry that person
   // over to the Messages page so it opens their chat directly.
   const [pendingChatUser, setPendingChatUser] = useState(null);
+
+  // Stable callback to prevent unnecessary re-renders in Messages component
+  const handlePendingChatHandled = useCallback(() => {
+    setPendingChatUser(null);
+  }, []);
 
   useEffect(() => {
     const handler = () => { if (window.innerWidth > 768) setMobileOpen(false); };
@@ -84,7 +89,7 @@ function AppInner() {
         {page === 'feed'        && <Feed        {...pageProps} />}
         {page === 'leaderboard' && <Leaderboard {...pageProps} />}
         {page === 'community'   && <Community   {...pageProps} onStartChat={(u) => { setPendingChatUser(u); setPage('messages'); }} />}
-        {page === 'messages'    && <Messages    {...pageProps} pendingChatUser={pendingChatUser} onPendingChatHandled={() => setPendingChatUser(null)} />}
+        {page === 'messages'    && <Messages    {...pageProps} pendingChatUser={pendingChatUser} onPendingChatHandled={handlePendingChatHandled} />}
         {page === 'profile'     && <Profile     {...pageProps} />}
         {page === 'goals'       && <Goals       {...pageProps} />}
         {page === 'tasks'       && <Tasks       {...pageProps} />}
